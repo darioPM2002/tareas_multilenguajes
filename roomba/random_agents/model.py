@@ -1,7 +1,7 @@
 from mesa import Model
 from mesa.discrete_space import OrthogonalMooreGrid
 
-from .agent import RandomAgent, ObstacleAgent, Roomba
+from .agent import Basura, EstacionCarga, ObstacleAgent, Roomba
 
 class RandomModel(Model):
     """
@@ -26,15 +26,21 @@ class RandomModel(Model):
         # Create the border cells
         for _, cell in enumerate(self.grid):
       
-            if i==0: 
+            if i==29: 
                 Roomba.create_agents(
                     self,
                     self.num_agents,
                     cell=cell,
                 )
                 self.running = True
+                EstacionCarga.create_agents(
+                    self,
+                    self.num_agents,
+                    cell=cell,
+                )
+                
             i+=1
-        RandomAgent.create_agents(
+        Basura.create_agents(
         self,
         self.num_agents,
         cell=self.random.choices(self.grid.empties.cells, k=self.num_agents)

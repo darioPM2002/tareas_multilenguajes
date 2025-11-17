@@ -1,4 +1,4 @@
-from random_agents.agent import DrawAgent, RandomAgent, ObstacleAgent, Roomba, greenAgent
+from random_agents.agent import DrawAgent,Basura, EstacionCarga, ObstacleAgent, Roomba, greenAgent
 from random_agents.model import RandomModel
 
 from mesa.visualization import (
@@ -21,6 +21,10 @@ def random_portrayal(agent):
     if isinstance(agent, DrawAgent):
         portrayal.color = "#40FF001E"
         portrayal.marker = "s"
+        portrayal.size = 100
+    if isinstance(agent, EstacionCarga):
+        portrayal.color = "#66FF00FF"
+        portrayal.marker = "p"
         portrayal.size = 100
     elif isinstance(agent, ObstacleAgent):
         portrayal.color = "gray"

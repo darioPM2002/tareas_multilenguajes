@@ -12,7 +12,7 @@ class DrawAgent(CellAgent):
 
     def step(self):
         pass
-class RandomAgent(CellAgent):
+class Basura(CellAgent):
     """
     Agent that moves randomly.
     Attributes:
@@ -59,24 +59,32 @@ class greenAgent(CellAgent):
         super().__init__()
  
         self.cell = cell
-       
+
     
 
 class Roomba(CellAgent):
     def __init__(self, model, cell):
       super().__init__(model)
       self.cell=cell
-      self.battery = 100          # nivel de batería inicial
+      self.battery = 100
+      self.distancia_base = 0          # nivel de batería inicial
       self.direction = ""      # dirección actual
       
     
 
-   
+    def borrarBasura(self):
+        basuras = [a for a in self.cell.agents if isinstance(a, Basura)]
+
+        for b in basuras:
+            print("Basura encontrada")
+            self.battery-=1
+            b.remove()   
+            
     def move(self):
+        self.borrarBasura()
+        
         next_moves = self.cell.neighborhood
-
         x, y = self.cell.coordinate
-
         izquierda = derecha = arriba = abajo = None
         superiorIz = superiorDe = inferiorIz = inferiorDer = None
 
@@ -164,6 +172,32 @@ class Roomba(CellAgent):
        pass
        
 
+
+class EstacionCarga(CellAgent):
+    def __init__(self, model, cell):
+      super().__init__(model)
+      self.cell=cell
+      self.battery = 100
+      self.distancia_base = 0          # nivel de batería inicial
+      self.direction = ""      # dirección actual
+      
+    
+
+    def borrarBasura(self):
+        basuras = [a for a in self.cell.agents if isinstance(a, Basura)]
+
+        for b in basuras:
+            print("Basura encontrada")
+            self.battery-=1
+            b.remove()   
+            
+    def move(self):
+        print()
+    def step(self):
+
+       self.move()
+       pass
+       
 
 class ObstacleAgent(FixedAgent):
     """
