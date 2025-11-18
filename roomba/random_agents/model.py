@@ -26,7 +26,7 @@ class RandomModel(Model):
         # Create the border cells
         for _, cell in enumerate(self.grid):
       
-            if i==29: 
+            if i==0: 
                 Roomba.create_agents(
                     self,
                     self.num_agents,
@@ -41,6 +41,11 @@ class RandomModel(Model):
                 
             i+=1
         Basura.create_agents(
+        self,
+        self.num_agents,
+        cell=self.random.choices(self.grid.empties.cells, k=self.num_agents)
+            )
+        ObstacleAgent.create_agents(
         self,
         self.num_agents,
         cell=self.random.choices(self.grid.empties.cells, k=self.num_agents)

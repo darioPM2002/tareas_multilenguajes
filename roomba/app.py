@@ -27,8 +27,8 @@ def random_portrayal(agent):
         portrayal.marker = "p"
         portrayal.size = 100
     elif isinstance(agent, ObstacleAgent):
-        portrayal.color = "gray"
-        portrayal.marker = "s"
+        portrayal.color = "red"
+        portrayal.marker = "h"
         portrayal.size = 100
     elif isinstance(agent, Roomba):
        portrayal.color = "purple"
