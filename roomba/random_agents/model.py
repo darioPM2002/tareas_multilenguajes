@@ -26,7 +26,7 @@ class RandomModel(Model):
         # Create the border cells
         for _, cell in enumerate(self.grid):
       
-            if i==0: 
+            if i==29: 
                 Roomba.create_agents(
                     self,
                     self.num_agents,
