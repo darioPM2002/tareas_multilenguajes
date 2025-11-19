@@ -23,21 +23,24 @@ class RandomModel(Model):
         # Identify the coordinates of the border of the grid
       
         i=0
+
         # Create the border cells
         for _, cell in enumerate(self.grid):
       
-            if i==29: 
+            if i==29 : 
+                
                 Roomba.create_agents(
                     self,
-                    self.num_agents,
+                    1,
                     cell=cell,
                 )
                 self.running = True
                 EstacionCarga.create_agents(
                     self,
-                    self.num_agents,
+                    1,
                     cell=cell,
                 )
+             
                 
             i+=1
         Basura.create_agents(

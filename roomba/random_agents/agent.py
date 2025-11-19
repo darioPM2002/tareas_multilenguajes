@@ -1,5 +1,6 @@
 from mesa.discrete_space import CellAgent, FixedAgent
 from collections import deque
+
 class DrawAgent(CellAgent):
     """
     Agente que solo sirve para dibujar una celda en el grid.
@@ -12,6 +13,7 @@ class DrawAgent(CellAgent):
 
     def step(self):
         pass
+
 class Basura(CellAgent):
     """
     Agent that moves randomly.
@@ -26,22 +28,20 @@ class Basura(CellAgent):
             cell: Reference to its position within the grid
         """
         super().__init__(model)
- 
         self.cell = cell
-        self.color= "blue"
-    
+        self.color = "blue"
 
     def move(self):
         """
         Determines the next empty cell in its neighborhood, and moves to it
         """
-        
+        pass
 
     def step(self):
         """
         Determines the new direction it will take, and then moves
         """
-        
+        pass
 
 class greenAgent(CellAgent):
     """
@@ -57,13 +57,11 @@ class greenAgent(CellAgent):
             cell: Reference to its position within the grid
         """
         super().__init__()
- 
         self.cell = cell
-
-from collections import deque  # Asegúrate de importar esto si no está en tu archivo
 
 class Roomba(CellAgent):
     def __init__(self, model, cell):
+        print("Creando Roomba en celda:", cell.coordinate)
         super().__init__(model)
         self.cell = cell
         self.battery = 100
@@ -73,6 +71,8 @@ class Roomba(CellAgent):
         self.direction = "arriba"
         self.estadoMovimiento = ""
         self.historialMapeado = [cell]  # Lista de GridCell visitadas
+        self.celda_antes_de_cargar = None  # Guardar última celda antes de ir a cargar
+        self.regresando_a_mapeo = False  # Flag para saber si está regresando
 
     # BORRAR BASURA
     def borrarBasura(self):
@@ -95,7 +95,7 @@ class Roomba(CellAgent):
         if inicio == objetivo:
             return True
 
-        # Crear set de celdas mapeadas (coordenadas válidas) - Simplificado
+        # Crear set de celdas mapeadas (coordenadas válidas)
         celdas_validas = set(item.coordinate for item in self.historialMapeado)
         celdas_validas.add(inicio)  # Incluir posición actual si no está
 
@@ -171,163 +171,186 @@ class Roomba(CellAgent):
 
     # MAPEO Y MOVIMIENTO
     def mapeoRoomba(self):
+
+        # ----------------------------
+        # LEER VECINOS
+        # ----------------------------
         next_moves = self.cell.neighborhood
         x, y = self.cell.coordinate
 
-        izquierda = derecha = arriba = abajo = izquierdaABajo = derechaAbajo = derechaArriba = izquierdaArriba = None
+        vecinos = {
+            "izquierda": None,
+            "derecha": None,
+            "arriba": None,
+            "abajo": None,
+            "izquierdaAbajo": None,
+            "derechaAbajo": None,
+            "derechaArriba": None,
+            "izquierdaArriba": None,
+        }
 
-        # IDENTIFICAR VECINOS
         for vecino in next_moves:
             if vecino is None:
                 continue
 
             cx, cy = vecino.coordinate
-            x, y = self.cell.coordinate
-            
-            # Marcar caminos (solo para visualización, NO agregar al historial aquí)
+
+            # Marcar visual
             if not any(isinstance(a, DrawAgent) for a in vecino.agents):
-                print(f"Marcando celda vecina: {vecino.coordinate}")  # Debug
                 da = DrawAgent(self.model, vecino, color="yellow")
                 self.model.register_agent(da)
-          
 
-                
+            if   (cx, cy) == (x - 1, y): vecinos["izquierda"] = vecino
+            elif (cx, cy) == (x + 1, y): vecinos["derecha"] = vecino
+            elif (cx, cy) == (x, y + 1): vecinos["arriba"] = vecino
+            elif (cx, cy) == (x, y - 1): vecinos["abajo"] = vecino
+            elif (cx, cy) == (x - 1, y - 1): vecinos["izquierdaAbajo"] = vecino
+            elif (cx, cy) == (x + 1, y - 1): vecinos["derechaAbajo"] = vecino
+            elif (cx, cy) == (x + 1, y + 1): vecinos["derechaArriba"] = vecino
+            elif (cx, cy) == (x - 1, y + 1): vecinos["izquierdaArriba"] = vecino
 
-            if (cx, cy) == (x - 1, y):
-                izquierda = vecino
-            elif (cx, cy) == (x + 1, y):
-                derecha = vecino
-            elif (cx, cy) == (x, y + 1):
-                arriba = vecino
-            elif (cx, cy) == (x, y - 1):
-                abajo = vecino
-            elif (cx, cy) == (x - 1, y - 1):
-                izquierdaABajo = vecino
-            elif (cx, cy) == (x + 1, y - 1):
-                derechaAbajo = vecino
-            elif (cx, cy) == (x + 1, y + 1):
-                derechaArriba = vecino
-            elif (cx, cy) == (x - 1, y + 1):
-                izquierdaArriba = vecino
+        arriba = vecinos["arriba"]
+        abajo = vecinos["abajo"]
+        izquierda = vecinos["izquierda"]
+        derecha = vecinos["derecha"]
 
-        # FUNCIÓN OBSTÁCULOS (pero None no es obstáculo)
+        # ----------------------------
+        # OBSTÁCULOS
+        # ----------------------------
         def hay_obstaculo(vec):
             if vec is None:
-                return "BORDE"  # borde, NO obstáculo
+                return "BORDE"
             if any(isinstance(a, ObstacleAgent) for a in vec.agents):
                 return "OBSTACULO"
+            return "LIBRE"
 
-        # -------------------------------------------------
-        #      ZIG-ZAG ENTRE ARRIBA Y ABAJO (bordes)
-        # -------------------------------------------------
-        
-        # -------------------------------------------------
-        #      MANIOBRA ANTI-OBSTÁCULO (NO aplica en bordes)
-        # -------------------------------------------------
+        # ----------------------------
+        # INICIALIZAR FSM SI NO EXISTE
+        # ----------------------------
+        if not hasattr(self, "estadoMovimiento") or self.estadoMovimiento == "":
+            self.estadoMovimiento = "ZIGZAG_UP"
 
-        ## MAPEO ZIGZAG
+        if not hasattr(self, "direction"):
+            self.direction = "arriba"
+
+        estado = self.estadoMovimiento
+
+        # ----------------------------
+        # RETORNO A BASE POR BATERÍA
+        # ----------------------------
         if self.battery < self.distancia_base + 3:
-            print("regresar a base")
-        else:
-            if self.direction == "arriba" and hay_obstaculo(arriba) == "BORDE":
-                self.direction = "derecha"
-                self.estadoMovimiento = "MOVIMINETOU"
-            elif self.direction == "derecha" and self.estadoMovimiento == "MOVIMINETOU":
-                self.direction = "derecha"
-                self.estadoMovimiento = "MOVIMINETOUFIN"
-            elif self.direction == "derecha" and self.estadoMovimiento == "MOVIMINETOUFIN":
-                self.direction = "abajo"
-                self.estadoMovimiento = ""
-            elif self.direction == "abajo" and hay_obstaculo(abajo) == "BORDE":
-                self.direction = "derecha"
-                self.estadoMovimiento = "MOVIMINETOUA"
-            elif self.direction == "derecha" and self.estadoMovimiento == "MOVIMINETOUA":
-                self.direction = "derecha"
-                self.estadoMovimiento = "MOVIMINETOUFIND"
-            elif self.direction == "derecha" and self.estadoMovimiento == "MOVIMINETOUFIND":
-                self.direction = "arriba"
-                self.estadoMovimiento = ""
+            self.estadoMovimiento = "RETURN_TO_BASE"
+            estado = "RETURN_TO_BASE"
 
-        #   EVITAR OBSTACULOS arriba
-            elif self.direction == "arriba" and hay_obstaculo(arriba) == "OBSTACULO":
-                self.direction = "derecha"
-                self.estadoMovimiento = "RODEAROBSTACULO"
-            elif self.direction == "derecha" and self.estadoMovimiento == "RODEAROBSTACULO":
-                self.direction = "arriba"
-                self.desviacionx += 1
-            elif self.direction == "arriba" and self.estadoMovimiento == "RODEAROBSTACULO":
-                self.direction = "arriba"
-                self.desviacionx += 1
-                self.estadoMovimiento = "RODEAROBSTACULOREGRE"
-            elif self.direction == "arriba" and self.estadoMovimiento == "RODEAROBSTACULOREGRE":
+        # ----------------------------
+        # ESTADOS FSM
+        # ----------------------------
+        def estado_RETURN_TO_BASE():
+            # Regresar moviéndose hacia la izquierda preferentemente
+            if hay_obstaculo(izquierda) == "LIBRE":
                 self.direction = "izquierda"
-                self.desviacionx -= 1
-                self.estadoMovimiento = "RODEAROBSTACULOREGRE"
-            elif self.direction == "izquierda" and self.estadoMovimiento == "RODEAROBSTACULOREGRE":
+            elif hay_obstaculo(abajo) == "LIBRE":
+                self.direction = "abajo"
+            elif hay_obstaculo(arriba) == "LIBRE":
                 self.direction = "arriba"
-                self.estadoMovimiento = ""
-            # EVITAR OBSTACULOS ABAJO
-            elif self.direction == "abajo" and hay_obstaculo(abajo) == "OBSTACULO":
-                self.direction = "derecha"
-                self.estadoMovimiento = "RODEAROBSTACULOA"
-            elif self.direction == "derecha" and self.estadoMovimiento == "RODEAROBSTACULOA":
-                self.direction = "abajo"
-                print("si llega")
-            elif self.direction == "abajo" and self.estadoMovimiento == "RODEAROBSTACULOA":
-                self.direction = "abajo"
-                self.desviacionx += 1
-                self.estadoMovimiento = "RODEAROBSTACULOREGREA"
-            elif self.direction == "abajo" and self.estadoMovimiento == "RODEAROBSTACULOREGREA":
-                if hay_obstaculo(izquierda) == "OBSTACULO" and hay_obstaculo(izquierdaABajo) == "OBSTACULO":
-                    print("SE CUMPLEEEEE")
-                else:
-                    self.direction = "abajo"
-                self.desviacionx -= 1
-                self.estadoMovimiento = "RODEAROBSTACULOREGREA"
-            elif self.direction == "izquierda" and self.estadoMovimiento == "RODEAROBSTACULOREGREA":
-                self.direction = "abajo"
-                self.estadoMovimiento = ""
-
-        # MOVER FINAL
-        print(f"Direction elegida: {self.direction}, arriba: {arriba is not None}, abajo: {abajo is not None}, derecha: {derecha is not None}, izquierda: {izquierda is not None}")  # Debug
-
-        if self.direction == "arriba" and arriba and hay_obstaculo(arriba) != "OBSTACULO":
-            self.move_to(arriba)
-            print("Moviendo arriba")  # Debug
-        elif self.direction == "abajo" and abajo and hay_obstaculo(abajo) != "OBSTACULO":
-            self.move_to(abajo)
-            print("Moviendo abajo")  # Debug
-        elif self.direction == "derecha" and derecha and hay_obstaculo(derecha) != "OBSTACULO":
-            self.move_to(derecha)
-            print("Moviendo derecha")  # Debug
-        elif self.direction == "izquierda" and izquierda and hay_obstaculo(izquierda) != "OBSTACULO":
-            self.move_to(izquierda)
-            print("Moviendo izquierda")  # Debug
-        else:
-            # Fallback: Si no puede moverse en la dirección elegida, intenta otra (gira a la derecha o elige un vecino libre)
-            print("No se puede mover en dirección actual, intentando fallback")  # Debug
-            for dir_name, vecino in [("arriba", arriba), ("abajo", abajo), ("derecha", derecha), ("izquierda", izquierda)]:
-                if vecino and hay_obstaculo(vecino) != "OBSTACULO":
-                    self.move_to(vecino)
-                    self.direction = dir_name  # Actualiza dirección para consistencia
-                    print(f"Fallback: Moviendo a {dir_name}")  # Debug
-                    break
             else:
-                print("No hay movimientos posibles - Roomba atascado")  # Debug
+                self.direction = "derecha"
 
-        return
+        # ---- ZIGZAG SUBIENDO ----
+        def estado_ZIGZAG_UP():
+            if hay_obstaculo(arriba) == "BORDE":
+                self.estadoMovimiento = "ZIGZAG_RIGHT_UP"
+            else:
+                self.direction = "arriba"
+
+        def estado_ZIGZAG_RIGHT_UP():
+            self.direction = "derecha"
+            self.estadoMovimiento = "ZIGZAG_DOWN"
+
+        # ---- ZIGZAG BAJANDO ----
+        def estado_ZIGZAG_DOWN():
+            if hay_obstaculo(abajo) == "BORDE":
+                self.estadoMovimiento = "ZIGZAG_RIGHT_DOWN"
+            else:
+                self.direction = "abajo"
+
+        def estado_ZIGZAG_RIGHT_DOWN():
+            self.direction = "derecha"
+            self.estadoMovimiento = "ZIGZAG_UP"
+
+        # ---- OBSTÁCULOS ----
+        def estado_OBSTACULO_UP():
+            if hay_obstaculo(arriba) == "OBSTACULO":
+                self.direction = "derecha"
+            else:
+                self.estadoMovimiento = "ZIGZAG_UP"
+
+        def estado_OBSTACULO_DOWN():
+            if hay_obstaculo(abajo) == "OBSTACULO":
+                self.direction = "derecha"
+            else:
+                self.estadoMovimiento = "ZIGZAG_DOWN"
+
+        # ----------------------------
+        # TABLA DE ESTADOS
+        # ----------------------------
+        tabla_estados = {
+            "RETURN_TO_BASE": estado_RETURN_TO_BASE,
+            "ZIGZAG_UP": estado_ZIGZAG_UP,
+            "ZIGZAG_RIGHT_UP": estado_ZIGZAG_RIGHT_UP,
+            "ZIGZAG_DOWN": estado_ZIGZAG_DOWN,
+            "ZIGZAG_RIGHT_DOWN": estado_ZIGZAG_RIGHT_DOWN,
+            "OBSTACULO_UP": estado_OBSTACULO_UP,
+            "OBSTACULO_DOWN": estado_OBSTACULO_DOWN,
+        }
+
+        # Si el estado no existe → zigzag
+        if estado not in tabla_estados:
+            self.estadoMovimiento = "ZIGZAG_UP"
+            estado = "ZIGZAG_UP"
+
+        # Ejecutar estado
+        tabla_estados[estado]()
+
+        # ----------------------------
+        # MOVIMIENTO FINAL
+        # ----------------------------
+        direcciones = {
+            "arriba": arriba,
+            "abajo": abajo,
+            "derecha": derecha,
+            "izquierda": izquierda,
+        }
+
+        destino = direcciones.get(self.direction)
+
+        # Movimiento normal
+        if destino and hay_obstaculo(destino) == "LIBRE":
+            self.move_to(destino)
+            return
+
+        # Fallback
+        for d, v in direcciones.items():
+            if v and hay_obstaculo(v) == "LIBRE":
+                self.direction = d
+                self.move_to(v)
+                return
+
+        print("Roomba totalmente bloqueado")
 
     def move(self):
-        print(f"Inicio de move() - Batería: {self.battery}, Distancia base: {self.distancia_base}")  # Debug
+        print(f"Inicio de move() - Batería: {self.battery}, Distancia base: {self.distancia_base}")
 
-        # Verificar si necesita regresar a base
-        if self.battery < self.distancia_base + 3:
+        # CASO 1: Verificar si necesita regresar a base para cargar
+        if self.battery < self.distancia_base + 3 and not self.regresando_a_mapeo:
             print("Batería baja, regresando a base")
-            print(len(self.historialMapeado))
-            # Si no está ya yendo a la base, calcular ruta
+            
+            # Guardar la celda actual antes de ir a cargar (si no está ya yendo)
             if not (hasattr(self, 'siguiendo_camino') and self.siguiendo_camino):
+                self.celda_antes_de_cargar = self.cell
+                print(f"Guardada celda antes de cargar: {self.celda_antes_de_cargar.coordinate}")
+                
                 if len(self.historialMapeado) > 0:
-                    # historialMapeado contiene GridCell directamente
                     celda_base = self.historialMapeado[0]
                     if celda_base:
                         self.ir_a_celda_objetivo(celda_base)
@@ -344,30 +367,50 @@ class Roomba(CellAgent):
                 print("Base alcanzada - recargando batería")
                 self.battery = 100  # Recargar batería
                 self.siguiendo_camino = False
+                
+                # Ahora debe regresar a la última celda donde estaba mapeando
+                if self.celda_antes_de_cargar:
+                    print(f"Regresando a celda de mapeo: {self.celda_antes_de_cargar.coordinate}")
+                    self.regresando_a_mapeo = True
+                    self.ir_a_celda_objetivo(self.celda_antes_de_cargar)
             return
 
-        # Si estamos siguiendo un camino objetivo (no base), continuar
+        # CASO 2: Si está regresando a la celda de mapeo después de cargar
+        if self.regresando_a_mapeo:
+            objetivo_alcanzado = self.seguir_camino_objetivo()
+            if objetivo_alcanzado:
+                print("Celda de mapeo alcanzada - continuando mapeo")
+                self.regresando_a_mapeo = False
+                self.celda_antes_de_cargar = None
+                # En el próximo step continuará con mapeo normal
+            return
+
+        # CASO 3: Si estamos siguiendo un camino objetivo (no base, no regreso)
         if hasattr(self, 'siguiendo_camino') and self.siguiendo_camino:
             objetivo_alcanzado = self.seguir_camino_objetivo()
             if objetivo_alcanzado:
                 self.borrarBasura()  # Limpiar al llegar
             return
 
-        # Si no hay objetivo, hacer mapeo normal
+        # CASO 4: Mapeo normal
         self.borrarBasura()
         self.mapeoRoomba()
         self.battery -= 1
         self.distancia_base = self.distancia_a_base()
         print(self.cell.neighborhood)
+        
         # Agregar la celda actual al historial DESPUÉS de mover (si no está ya)
-        for vecino in  self.cell.neighborhood:
-            if vecino is None:
+        for vecino in self.cell.neighborhood:
+            if vecino is None  :
+        
                 continue
-            
-
+            for a in vecino.agents:
+                if isinstance(a, ObstacleAgent):
+                    print("Vecino es obstaculo___________________________________________________")
+                    continue
             if vecino not in self.historialMapeado:
                 self.historialMapeado.append(vecino)
-                print(f"Agregada celda al historial: {self.cell.coordinate}")  # Debug
+                
 
     def step(self):
         self.move()
@@ -376,29 +419,26 @@ class Roomba(CellAgent):
 
 class EstacionCarga(CellAgent):
     def __init__(self, model, cell):
-      super().__init__(model)
-      self.cell=cell
-      self.battery = 100
-      self.distancia_base = 0          # nivel de batería inicial
-      self.direction = ""      # dirección actual
-     
-    
+        super().__init__(model)
+        self.cell = cell
+        self.battery = 100
+        self.distancia_base = 0
+        self.direction = ""
 
     def borrarBasura(self):
         basuras = [a for a in self.cell.agents if isinstance(a, Basura)]
-
         for b in basuras:
             print("Basura encontrada")
-            self.battery-=1
-            b.remove()   
+            self.battery -= 1
+            b.remove()
             
     def move(self):
         print()
-    def step(self):
         
-       self.move()
-       pass
-       
+    def step(self):
+        self.move()
+        pass
+
 
 class ObstacleAgent(FixedAgent):
     """
@@ -406,7 +446,7 @@ class ObstacleAgent(FixedAgent):
     """
     def __init__(self, model, cell):
         super().__init__(model)
-        self.cell=cell
+        self.cell = cell
 
     def step(self):
         pass
