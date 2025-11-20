@@ -1,5 +1,6 @@
 from mesa import Model
 from mesa.discrete_space import OrthogonalMooreGrid
+from mesa.datacollection import DataCollector
 
 from .agent import Basura, EstacionCarga, ObstacleAgent, Roomba
 
@@ -22,12 +23,12 @@ class RandomModel(Model):
 
         # Identify the coordinates of the border of the grid
       
-        i=0
+        i = 0
 
         # Create the border cells
         for _, cell in enumerate(self.grid):
       
-            if i==29 : 
+            if i == 29: 
                 
                 Roomba.create_agents(
                     self,
@@ -42,21 +43,52 @@ class RandomModel(Model):
                 )
              
                 
-            i+=1
+            i += 1
         Basura.create_agents(
-        self,
-        self.num_agents,
-        cell=self.random.choices(self.grid.empties.cells, k=self.num_agents)
-            )
+            self,
+            self.num_agents,
+            cell=self.random.choices(self.grid.empties.cells, k=self.num_agents)
+        )
         ObstacleAgent.create_agents(
-        self,
-        self.num_agents,
-        cell=self.random.choices(self.grid.empties.cells, k=self.num_agents)
-            )
+            self,
+            self.num_agents,
+            cell=self.random.choices(self.grid.empties.cells, k=self.num_agents)
+        )
        
+        # Configurar el DataCollector
+        self.datacollector = DataCollector(
+            model_reporters={
+                "Batería": get_battery,
+                "Basuras": get_trash_count,
+                "Celdas Mapeadas": get_mapped_cells
+            }
+        )
         
         self.running = True
 
     def step(self):
         '''Advance the model by one step.'''
         self.agents.shuffle_do("step")
+        self.datacollector.collect(self)
+
+
+# Funciones para recolectar datos
+def get_battery(model):
+    """Obtiene la batería del Roomba"""
+    roombas = [agent for agent in model.agents if isinstance(agent, Roomba)]
+    if roombas:
+        return roombas[0].battery
+    return 0
+
+
+def get_trash_count(model):
+    """Cuenta la cantidad de basura restante"""
+    return len([agent for agent in model.agents if isinstance(agent, Basura)])
+
+
+def get_mapped_cells(model):
+    """Cuenta el número de celdas mapeadas por el Roomba"""
+    roombas = [agent for agent in model.agents if isinstance(agent, Roomba)]
+    if roombas:
+        return len(roombas[0].historialMapeado)
+    return 0

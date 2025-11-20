@@ -1,10 +1,11 @@
-from random_agents.agent import DrawAgent,Basura, EstacionCarga, ObstacleAgent, Roomba, greenAgent
+from random_agents.agent import DrawAgent, Basura, EstacionCarga, ObstacleAgent, Roomba, greenAgent
 from random_agents.model import RandomModel
 
 from mesa.visualization import (
     Slider,
     SolaraViz,
     make_space_component,
+    make_plot_component,
 )
 
 from mesa.visualization.components import AgentPortrayalStyle
@@ -44,6 +45,9 @@ def random_portrayal(agent):
 def post_process(ax):
     ax.set_aspect("equal")
 
+def post_process_lines(ax):
+    ax.legend(loc="center left", bbox_to_anchor=(1, 0.9))
+
 model_params = {
     "seed": {
         "type": "InputText",
@@ -69,9 +73,19 @@ space_component = make_space_component(
         post_process=post_process
 )
 
+# Componente de gráfica para monitorear batería, basuras y celdas mapeadas
+lineplot_component = make_plot_component(
+    {
+        "Batería": "tab:green",
+        "Basuras": "tab:red", 
+        "Celdas Mapeadas": "tab:blue"
+    },
+    post_process=post_process_lines,
+)
+
 page = SolaraViz(
     model,
-    components=[space_component],
+    components=[space_component, lineplot_component],
     model_params=model_params,
     name="Random Model",
 )
