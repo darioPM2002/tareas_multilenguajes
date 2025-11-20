@@ -47,14 +47,18 @@ def post_process(ax):
 
 def post_process_lines(ax):
     ax.legend(loc="center left", bbox_to_anchor=(1, 0.9))
-
 model_params = {
     "seed": {
         "type": "InputText",
         "value": 42,
         "label": "Random Seed",
     },
-    "num_agents": Slider("Number of agents", 10, 1, 50),
+    "num_agents": Slider("Número total de elementos (basura + obstáculos)", 20, 1, 200),
+
+    # NUEVOS SLIDERS
+ "porcentaje_basura": Slider("Porcentaje basura", 0.3, 0, 1, step=0.05),
+"porcentaje_obstaculos": Slider("Porcentaje obstáculos", 0.3, 0, 1, step=0.05),
+
     "width": Slider("Grid width", 28, 1, 50),
     "height": Slider("Grid height", 28, 1, 50),
 }
@@ -64,7 +68,9 @@ model = RandomModel(
     num_agents=model_params["num_agents"].value,
     width=model_params["width"].value,
     height=model_params["height"].value,
-    seed=model_params["seed"]["value"]
+    seed=model_params["seed"]["value"],
+    porcentaje_basura=model_params["porcentaje_basura"].value,
+    porcentaje_obstaculos=model_params["porcentaje_obstaculos"].value
 )
 
 space_component = make_space_component(
